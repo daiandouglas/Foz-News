@@ -1,3 +1,15 @@
+export enum UserRole {
+  ADMIN = 'Administrator',
+  EDITOR = 'Editor',
+  COLLABORATOR = 'Collaborator',
+}
+
+export interface User {
+  id: string;
+  email: string;
+  role: UserRole;
+}
+
 export enum ArticleStatus {
   DRAFT = 'DRAFT',
   REVIEW = 'REVIEW',
