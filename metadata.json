@@ -1,0 +1,5 @@
+{
+  "name": "Sul News AI Editor",
+  "description": "An AI-powered news generation and editorial dashboard for local and regional news. It automates news prospecting using Google Search, generates journalistic articles and images with Gemini, and provides a streamlined editorial workflow for review and publication.",
+  "requestFramePermissions": []
+}
