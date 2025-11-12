@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Tone, SourceURL } from '../types';
 
@@ -13,9 +12,9 @@ interface ProspectResult {
   sources: SourceURL[];
 }
 
-export const prospectNews = async (city: string, keywords: string[]): Promise<ProspectResult> => {
+export const prospectNews = async (city: string, keywords: string[], timeRange: string): Promise<ProspectResult> => {
   const prompt = `
-    Atue como um agregador de notícias. Pesquise as notícias mais relevantes sobre "${city}" e palavras-chave relacionadas como "${keywords.join(', ')}" nas últimas 24 horas.
+    Atue como um agregador de notícias. Pesquise as notícias mais relevantes sobre "${city}" e palavras-chave relacionadas como "${keywords.join(', ')}" ${timeRange}.
     Identifique as 3 notícias mais significativas. Para cada notícia, forneça um resumo conciso de uma frase para usar como tópico.
     Responda APENAS com uma string JSON contendo um array de objetos, onde cada objeto tem uma chave "topic".
     Exemplo de formato de resposta: [{"topic": "Resumo da notícia 1"}, {"topic": "Resumo da notícia 2"}]
@@ -31,7 +30,9 @@ export const prospectNews = async (city: string, keywords: string[]): Promise<Pr
     });
 
     const text = response.text.trim();
-    const topics = JSON.parse(text);
+    // Basic cleanup if the response is wrapped in markdown
+    const cleanedText = text.replace(/^```json\s*|```\s*$/g, '');
+    const topics = JSON.parse(cleanedText);
     
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sources = groundingChunks

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
 import Header from './components/Header';
 import KanbanBoard from './components/KanbanBoard';
@@ -7,8 +6,20 @@ import StatCard from './components/StatCard';
 import Spinner from './components/Spinner';
 import { Article, ArticleStatus, Tone } from './types';
 import * as geminiService from './services/geminiService';
+import { KANBAN_COLUMNS } from './constants';
 
 const initialArticles: Article[] = []; // Start with no articles
+
+const timeRangeOptions: Record<string, string> = {
+    'nas últimas 6 horas': 'Últimas 6h',
+    'nas últimas 12 horas': 'Últimas 12h',
+    'nas últimas 24 horas': 'Últimas 24h',
+    'nos últimos 3 dias': 'Últimos 3 dias',
+    'nos últimos 7 dias': 'Últimos 7 dias',
+    'nos últimos 15 dias': 'Últimos 15 dias',
+    'nos últimos 30 dias': 'Últimos 30 dias',
+};
+
 
 const Dashboard: React.FC = () => {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
@@ -19,8 +30,19 @@ const Dashboard: React.FC = () => {
   const [currentArticle, setCurrentArticle] = useState<Article | null>(null);
   
   // -- Config State --
-  const [prospectConfig, setProspectConfig] = useState({ city: "Foz do Iguaçu", keywords: "Cataratas, Itaipu, fronteira" });
+  const [prospectConfig, setProspectConfig] = useState({ 
+    city: "Foz do Iguaçu", 
+    keywords: ["Cataratas", "Itaipu", "fronteira", ""],
+    timeRange: "nas últimas 24 horas",
+  });
   const [generationConfig, setGenerationConfig] = useState({ tone: Tone.NEUTRAL, length: 150, count: 3 });
+
+  // -- Filter State --
+  const [filters, setFilters] = useState({
+    status: '',
+    topic: '',
+    date: '',
+  });
 
   const stats = useMemo(() => {
     return articles.reduce((acc, article) => {
@@ -29,14 +51,56 @@ const Dashboard: React.FC = () => {
     }, {} as Record<ArticleStatus, number>);
   }, [articles]);
 
+  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const handleKeywordChange = (index: number, value: string) => {
+    setProspectConfig(prev => {
+        const newKeywords = [...prev.keywords];
+        newKeywords[index] = value;
+        return { ...prev, keywords: newKeywords };
+    });
+  };
+
+  const clearFilters = () => {
+    setFilters({ status: '', topic: '', date: '' });
+  };
+
+  const filteredArticles = useMemo(() => {
+    return articles.filter(article => {
+      const statusMatch = filters.status ? article.status === filters.status : true;
+      const topicMatch = filters.topic 
+        ? article.topic.toLowerCase().includes(filters.topic.toLowerCase()) || 
+          article.title.toLowerCase().includes(filters.topic.toLowerCase()) 
+        : true;
+      const dateMatch = filters.date 
+        ? (article.publishedAt && article.publishedAt.slice(0, 10) === filters.date) 
+        : true;
+      return statusMatch && topicMatch && dateMatch;
+    });
+  }, [articles, filters]);
+
   const handleProspectNews = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { topics, sources } = await geminiService.prospectNews(prospectConfig.city, prospectConfig.keywords.split(',').map(k => k.trim()));
+      const activeKeywords = prospectConfig.keywords.map(k => k.trim()).filter(Boolean);
+      if (activeKeywords.length === 0) {
+        throw new Error("Por favor, forneça pelo menos uma palavra-chave.");
+      }
+
+      const { topics, sources } = await geminiService.prospectNews(
+        prospectConfig.city,
+        activeKeywords,
+        prospectConfig.timeRange
+      );
       
       const newArticles: Article[] = [];
-      for (const item of topics.slice(0, generationConfig.count)) {
+      // Generate articles for a limited number of topics to avoid excessive API calls
+      const topicsToProcess = topics.slice(0, generationConfig.count);
+      
+      for (const item of topicsToProcess) {
         const { title, content } = await geminiService.generateArticle(item.topic, generationConfig.tone, generationConfig.length);
         const { base64Image, prompt } = await geminiService.generateImage(title);
 
@@ -59,6 +123,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
+
   const handleReviewArticle = (article: Article) => {
     setCurrentArticle(article);
     setIsModalOpen(true);
@@ -77,10 +142,15 @@ const Dashboard: React.FC = () => {
   const handleUpdateStatus = (articleId: string, status: ArticleStatus) => {
     setArticles(prev => prev.map(a => {
         if (a.id === articleId) {
-            const updatedArticle = { ...a, status };
+            const updatedArticle: Article = { ...a, status };
             if (status === ArticleStatus.PUBLISHED) {
-                // Simulate getting a published URL
                 updatedArticle.publishedUrl = `https://github.com/daiandouglas/Sul-News`;
+                if (!a.publishedAt) {
+                  updatedArticle.publishedAt = new Date().toISOString();
+                }
+            } else {
+              delete updatedArticle.publishedUrl;
+              delete updatedArticle.publishedAt;
             }
             return updatedArticle;
         }
@@ -122,27 +192,91 @@ const Dashboard: React.FC = () => {
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         {/* Painel de Controle */}
         <div className="bg-white p-6 rounded-xl shadow-md mb-8">
-          <h2 className="text-xl font-bold mb-4">Painel de Geração de Notícias</h2>
+            <h2 className="text-xl font-bold mb-4">Painel de Geração de Notícias</h2>
+            <div className="space-y-4">
+                {/* Linha 1: Configurações de Prospecção e Geração */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    {/* Prospecção */}
+                    <div>
+                        <label className="text-sm font-semibold text-slate-600 mb-1 block">Cidade</label>
+                        <input type="text" value={prospectConfig.city} onChange={e => setProspectConfig(c => ({...c, city: e.target.value}))} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-slate-600 mb-1 block">Intervalo</label>
+                        <select value={prospectConfig.timeRange} onChange={e => setProspectConfig(c => ({...c, timeRange: e.target.value}))} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                            {Object.entries(timeRangeOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                    </div>
+                    {/* Geração */}
+                    <div>
+                        <label className="text-sm font-semibold text-slate-600 mb-1 block">Tom</label>
+                        <select value={generationConfig.tone} onChange={e => setGenerationConfig(c => ({...c, tone: e.target.value as Tone}))} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                            {Object.values(Tone).map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-slate-600 mb-1 block">Tamanho (palavras)</label>
+                        <input type="number" step="10" value={generationConfig.length} onChange={e => setGenerationConfig(c => ({...c, length: parseInt(e.target.value)}))} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
+                    </div>
+                    <div>
+                        <label className="text-sm font-semibold text-slate-600 mb-1 block">Qtd. de Artigos</label>
+                        <input type="number" min="1" max="5" value={generationConfig.count} onChange={e => setGenerationConfig(c => ({...c, count: parseInt(e.target.value)}))} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
+                    </div>
+                </div>
+
+                {/* Linha 2: Palavras-chave */}
+                <div>
+                    <label className="text-sm font-semibold text-slate-600 mb-1 block">Palavras-chave para Prospecção</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {prospectConfig.keywords.map((keyword, index) => (
+                            <input
+                                key={index}
+                                type="text"
+                                placeholder={`Palavra-chave ${index + 1}...`}
+                                value={keyword}
+                                onChange={(e) => handleKeywordChange(index, e.target.value)}
+                                className="w-full p-2 border border-slate-300 rounded-md bg-white"
+                            />
+                        ))}
+                    </div>
+                </div>
+                
+                {/* Linha 3: Ação */}
+                <div className="pt-2">
+                    <button onClick={handleProspectNews} disabled={isLoading} className="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 flex items-center justify-center">
+                        {isLoading ? <Spinner size="sm"/> : 'Prospectar & Gerar Notícias'}
+                    </button>
+                </div>
+            </div>
+            {error && <p className="text-red-500 mt-4 text-sm">{error}</p>}
+        </div>
+
+
+        {/* Filtros */}
+        <div className="bg-white p-6 rounded-xl shadow-md mb-8">
+          <h2 className="text-xl font-bold mb-4">Filtros</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-             <div>
-                <label className="text-sm font-semibold text-slate-600 mb-1 block">Tom</label>
-                <select value={generationConfig.tone} onChange={e => setGenerationConfig(c => ({...c, tone: e.target.value as Tone}))} className="w-full p-2 border border-slate-300 rounded-md bg-white">
-                    {Object.values(Tone).map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-             </div>
-             <div>
-                <label className="text-sm font-semibold text-slate-600 mb-1 block">Tamanho (palavras)</label>
-                <input type="number" value={generationConfig.length} onChange={e => setGenerationConfig(c => ({...c, length: parseInt(e.target.value)}))} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
-             </div>
-             <div>
-                <label className="text-sm font-semibold text-slate-600 mb-1 block">Qtd. de Artigos</label>
-                <input type="number" min="1" max="5" value={generationConfig.count} onChange={e => setGenerationConfig(c => ({...c, count: parseInt(e.target.value)}))} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
-             </div>
-             <button onClick={handleProspectNews} disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 flex items-center justify-center">
-                {isLoading ? <Spinner size="sm"/> : 'Prospectar & Gerar Notícias'}
-             </button>
+            <div>
+              <label className="text-sm font-semibold text-slate-600 mb-1 block">Status</label>
+              <select name="status" value={filters.status} onChange={(e) => handleFilterChange('status', e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white">
+                <option value="">Todos</option>
+                {KANBAN_COLUMNS.map(col => (<option key={col.status} value={col.status}>{col.title}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-600 mb-1 block">Tópico ou Título</label>
+              <input type="text" placeholder="Pesquisar..." value={filters.topic} onChange={(e) => handleFilterChange('topic', e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-600 mb-1 block">Data de Publicação</label>
+              <input type="date" value={filters.date} onChange={(e) => handleFilterChange('date', e.target.value)} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
+            </div>
+            <div>
+              <button onClick={clearFilters} className="w-full bg-slate-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors">
+                Limpar Filtros
+              </button>
+            </div>
           </div>
-          {error && <p className="text-red-500 mt-4">{error}</p>}
         </div>
 
         {/* Estatísticas */}
@@ -154,7 +288,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Kanban Board */}
-        <KanbanBoard articles={articles} onReviewArticle={handleReviewArticle} />
+        <KanbanBoard articles={filteredArticles} onReviewArticle={handleReviewArticle} />
       </main>
 
       <ReviewModal

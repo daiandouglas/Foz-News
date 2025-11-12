@@ -41,4 +41,5 @@ export interface Article {
   sourceUrls: SourceURL[];
   topic: string;
   publishedUrl?: string;
+  publishedAt?: string;
 }
