@@ -31,8 +31,7 @@ const Dashboard: React.FC = () => {
   
   // -- Config State --
   const [prospectConfig, setProspectConfig] = useState({ 
-    city: "Foz do Iguaçu", 
-    keywords: ["Cataratas", "Itaipu", "fronteira", ""],
+    keywords: ["Foz do Iguaçu", "Cataratas", "Itaipu", ""],
     timeRange: "nas últimas 24 horas",
   });
   const [generationConfig, setGenerationConfig] = useState({ tone: Tone.NEUTRAL, length: 150, count: 3 });
@@ -91,7 +90,6 @@ const Dashboard: React.FC = () => {
       }
 
       const { topics, sources } = await geminiService.prospectNews(
-        prospectConfig.city,
         activeKeywords,
         prospectConfig.timeRange
       );
@@ -194,20 +192,14 @@ const Dashboard: React.FC = () => {
         <div className="bg-white p-6 rounded-xl shadow-md mb-8">
             <h2 className="text-xl font-bold mb-4">Painel de Geração de Notícias</h2>
             <div className="space-y-4">
-                {/* Linha 1: Configurações de Prospecção e Geração */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                    {/* Prospecção */}
-                    <div>
-                        <label className="text-sm font-semibold text-slate-600 mb-1 block">Cidade</label>
-                        <input type="text" value={prospectConfig.city} onChange={e => setProspectConfig(c => ({...c, city: e.target.value}))} className="w-full p-2 border border-slate-300 rounded-md bg-white"/>
-                    </div>
+                {/* Linha 1: Configurações de Geração */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label className="text-sm font-semibold text-slate-600 mb-1 block">Intervalo</label>
                         <select value={prospectConfig.timeRange} onChange={e => setProspectConfig(c => ({...c, timeRange: e.target.value}))} className="w-full p-2 border border-slate-300 rounded-md bg-white">
                             {Object.entries(timeRangeOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                         </select>
                     </div>
-                    {/* Geração */}
                     <div>
                         <label className="text-sm font-semibold text-slate-600 mb-1 block">Tom</label>
                         <select value={generationConfig.tone} onChange={e => setGenerationConfig(c => ({...c, tone: e.target.value as Tone}))} className="w-full p-2 border border-slate-300 rounded-md bg-white">

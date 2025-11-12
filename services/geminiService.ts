@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Tone, SourceURL } from '../types';
 
 if (!process.env.API_KEY) {
@@ -12,9 +12,9 @@ interface ProspectResult {
   sources: SourceURL[];
 }
 
-export const prospectNews = async (city: string, keywords: string[], timeRange: string): Promise<ProspectResult> => {
+export const prospectNews = async (keywords: string[], timeRange: string): Promise<ProspectResult> => {
   const prompt = `
-    Atue como um agregador de notícias. Pesquise as notícias mais relevantes sobre "${city}" e palavras-chave relacionadas como "${keywords.join(', ')}" ${timeRange}.
+    Atue como um agregador de notícias. Pesquise as notícias mais relevantes sobre os seguintes temas e palavras-chave: "${keywords.join(', ')}" ${timeRange}.
     Identifique as 3 notícias mais significativas. Para cada notícia, forneça um resumo conciso de uma frase para usar como tópico.
     Responda APENAS com uma string JSON contendo um array de objetos, onde cada objeto tem uma chave "topic".
     Exemplo de formato de resposta: [{"topic": "Resumo da notícia 1"}, {"topic": "Resumo da notícia 2"}]
@@ -66,10 +66,10 @@ export const generateArticle = async (topic: string, tone: Tone, length: number)
       systemInstruction,
       responseMimeType: "application/json",
       responseSchema: {
-        type: 2, // OBJECT
+        type: Type.OBJECT,
         properties: {
-          title: { type: 1 }, // STRING
-          content: { type: 1 } // STRING
+          title: { type: Type.STRING },
+          content: { type: Type.STRING }
         }
       }
     },
