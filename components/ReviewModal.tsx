@@ -9,7 +9,7 @@ interface ReviewModalProps {
   onClose: () => void;
   onSave: (updatedArticle: Article) => void;
   onUpdateStatus: (articleId: string, status: ArticleStatus) => void;
-  onRegenerateImage: (article: Article) => Promise<void>;
+  onRegenerateImage: (article: Article, customPrompt?: string) => Promise<void>;
   isUpdating: boolean;
 }
 
@@ -23,11 +23,13 @@ const LinkIcon = () => (
 const ReviewModal: React.FC<ReviewModalProps> = ({ article, isOpen, onClose, onSave, onUpdateStatus, onRegenerateImage, isUpdating }) => {
   const [editedTitle, setEditedTitle] = useState('');
   const [editedContent, setEditedContent] = useState('');
+  const [imagePrompt, setImagePrompt] = useState('');
 
   useEffect(() => {
     if (article) {
       setEditedTitle(article.title);
       setEditedContent(article.content);
+      setImagePrompt(article.imagePrompt || '');
     }
   }, [article]);
 
@@ -90,10 +92,15 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ article, isOpen, onClose, onS
              </div>
              <div>
                 <label className="text-sm font-semibold text-slate-600 mb-1 block">Prompt da Imagem</label>
-                <p className="text-xs p-2 bg-slate-50 text-slate-500 rounded-md border">{article.imagePrompt}</p>
+                <textarea
+                    value={imagePrompt}
+                    onChange={(e) => setImagePrompt(e.target.value)}
+                    placeholder="Descreva como você quer a imagem..."
+                    className="w-full p-2 text-xs bg-white text-slate-700 rounded-md border border-slate-300 h-20 resize-none focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
              </div>
              <button
-                onClick={() => onRegenerateImage(article)}
+                onClick={() => onRegenerateImage(article, imagePrompt)}
                 disabled={isUpdating}
                 className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-md text-sm transition-colors disabled:opacity-50"
              >

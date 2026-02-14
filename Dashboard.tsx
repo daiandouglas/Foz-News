@@ -98,22 +98,38 @@ const Dashboard: React.FC = () => {
       // Generate articles for a limited number of topics to avoid excessive API calls
       const topicsToProcess = topics.slice(0, generationConfig.count);
       
-      for (const item of topicsToProcess) {
+      // 1. Generate Texts first (Faster, less likely to timeout)
+      const textPromises = topicsToProcess.map(async (item) => {
         const { title, content } = await geminiService.generateArticle(item.topic, generationConfig.tone, generationConfig.length);
-        const { base64Image, prompt } = await geminiService.generateImage(title);
-
-        newArticles.push({
+        
+        const newArticle: Article = {
           id: `art_${Date.now()}_${Math.random()}`,
           title,
           content,
-          imageUrl: `data:image/jpeg;base64,${base64Image}`,
-          imagePrompt: prompt,
+          imageUrl: '', // Placeholder
+          imagePrompt: '',
           status: ArticleStatus.DRAFT,
           sourceUrls: sources,
           topic: item.topic,
-        });
-      }
-      setArticles(prev => [...prev, ...newArticles]);
+        };
+        return newArticle;
+      });
+
+      const generatedArticles = await Promise.all(textPromises);
+      setArticles(prev => [...prev, ...generatedArticles]);
+
+      // 2. Trigger Image Generation in background (Non-blocking)
+      generatedArticles.forEach(async (article) => {
+        try {
+            const { base64Image, prompt } = await geminiService.generateImage(article.title);
+            const updatedArticle = { ...article, imageUrl: `data:image/jpeg;base64,${base64Image}`, imagePrompt: prompt };
+            handleSaveArticle(updatedArticle);
+        } catch (imgErr) {
+            console.error(`Failed to generate image for ${article.title}`, imgErr);
+            // Optionally set a fallback image here
+        }
+      });
+
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro desconhecido.');
     } finally {
@@ -142,7 +158,8 @@ const Dashboard: React.FC = () => {
         if (a.id === articleId) {
             const updatedArticle: Article = { ...a, status };
             if (status === ArticleStatus.PUBLISHED) {
-                updatedArticle.publishedUrl = `https://github.com/daiandouglas/Sul-News`;
+                // Simulating a real URL based on ID. In a real app, this comes from the backend.
+                updatedArticle.publishedUrl = `https://github.com/daiandouglas/Sul-News/blob/main/news/${a.id}`;
                 if (!a.publishedAt) {
                   updatedArticle.publishedAt = new Date().toISOString();
                 }
@@ -157,11 +174,11 @@ const Dashboard: React.FC = () => {
     handleCloseModal();
   };
 
-  const handleRegenerateImage = useCallback(async (article: Article) => {
+  const handleRegenerateImage = useCallback(async (article: Article, customPrompt?: string) => {
     if (!article) return;
     setIsUpdating(true);
     try {
-        const { base64Image, prompt } = await geminiService.generateImage(article.title);
+        const { base64Image, prompt } = await geminiService.generateImage(article.title, customPrompt);
         const updatedArticle = { 
             ...article, 
             imageUrl: `data:image/jpeg;base64,${base64Image}`,
